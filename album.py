@@ -59,50 +59,52 @@ def get_data():
 
 # --- 4. 主程式邏輯 ---
 status_placeholder = st.empty()
-
 current_stock = get_data()
 
 if current_stock is not None:
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz).strftime("%H:%M:%S")
 
-    # 1. 初始基準點設定
+    # 1. 初始化基準點
     if st.session_state.last_stock == 0:
         st.session_state.last_stock = current_stock
 
-    # 2. 核心過濾邏輯：只有當庫存「真的變少」才進入判斷
+    # 2. 核心過濾邏輯
     if current_stock < st.session_state.last_stock:
         
-        # --- [關鍵點] 檢查歷史紀錄中最後一筆的庫存數 ---
-        is_duplicate = False
+        # --- [最強保險] 直接檢查整個歷史紀錄中的「剩餘庫存」列 ---
+        # 只要這個數字以前出現過，就絕對不存
+        already_exists = False
         if not st.session_state.history.empty:
-            # .iloc[0] 是因為我們在程式裡是用 concat(new, history) 讓最新在上面
-            latest_recorded_stock = st.session_state.history.iloc[0]['剩餘庫存']
-            if current_stock == latest_recorded_stock:
-                is_duplicate = True
+            if current_stock in st.session_state.history['剩餘庫存'].values:
+                already_exists = True
         
-        # 只有「不重複」才執行存入動作
-        if not is_duplicate:
+        if not already_exists:
             diff = st.session_state.last_stock - current_stock
             
-            # A. 寫入雲端
+            # 寫入雲端
             if sheet:
                 try:
-                    sheet.append_row([now, diff, current_stock])
+                    # 在寫入前最後一刻再檢查一次雲端最後一列（防止多視窗併發）
+                    # 這一行雖然會慢一點點，但能極大程度防止重複
+                    last_row_val = sheet.col_values(3)[-1] # 假設第 3 欄是剩餘庫存
+                    if str(current_stock) != str(last_row_val):
+                        sheet.append_row([now, diff, current_stock])
+                        
+                        # 更新本地紀錄
+                        new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
+                        st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
                 except:
-                    pass
+                    # 如果是第一次運行或抓取失敗，依然嘗試更新本地
+                    new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
+                    st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
             
-            # B. 更新本地歷史紀錄
-            new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
-            st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
-            
-            # C. 只有成功紀錄後才更新 last_stock 基準
+            # 成功與否都更新基準點
             st.session_state.last_stock = current_stock
         else:
-            # 如果是重複庫存，雖然不存入，但要把基準點對齊，防止一直進入這個判斷
+            # 發現重複庫存，僅更新基準點
             st.session_state.last_stock = current_stock
 
-    # 3. 處理補貨/退貨情況
     elif current_stock > st.session_state.last_stock:
         st.session_state.last_stock = current_stock
 
