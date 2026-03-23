@@ -112,7 +112,7 @@ if current_stock is not None:
                 
                 # 重新命名欄位為：排名、本數、時間
                 ranking_df = ranking_df.rename(columns={'單筆數量': '本數'})
-                st.table(ranking_df.head(10)) # 顯示前 10 名
+                st.dataframe(ranking_df.head(100)) # 顯示前 10 名
             else:
                 st.write("尚無銷售數據")
 
