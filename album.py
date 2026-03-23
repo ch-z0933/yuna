@@ -50,14 +50,24 @@ if 'cloud_synced' not in st.session_state:
             pass
 
 def get_data():
+    # 模擬成真實瀏覽器訪問，不然 TDK 會回傳 403 錯誤
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     try:
-        # 加上隨機參數防止快取
-        res = requests.get(f"{API_URL}&t={int(time.time())}", timeout=10)
+        # 在網址後面加上隨機時間戳防止快取
+        res = requests.get(f"{API_URL}&t={int(time.time())}", headers=headers, timeout=10)
+        
+        # 如果狀態碼不是 200，在畫面上顯示
+        if res.status_code != 200:
+            st.error(f"API 回傳錯誤代碼: {res.status_code}")
+            return None
+            
         data = res.json()
-        # TDK API 關鍵欄位: left_items_quantity
         stock = data.get('left_items_quantity', 0)
         return stock
-    except:
+    except Exception as e:
+        st.error(f"連線出錯: {e}")
         return None
 
 # --- 4. 主程式執行 ---
