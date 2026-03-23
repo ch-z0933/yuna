@@ -66,30 +66,43 @@ if current_stock is not None:
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz).strftime("%H:%M:%S")
 
-    # 1. 第一次執行：先記錄初始庫存，不寫入試算表
+    # 1. 初始基準點設定
     if st.session_state.last_stock == 0:
         st.session_state.last_stock = current_stock
 
-    # 2. 關鍵邏輯：只有當「庫存減少」且「庫存數與上一次不同」時才執行
-    # 如果 current_stock == last_stock，這裡會直接跳過，不會有任何動作
+    # 2. 核心過濾邏輯：只有當庫存「真的變少」才進入判斷
     if current_stock < st.session_state.last_stock:
-        diff = st.session_state.last_stock - current_stock
         
-        # A. 寫入雲端 (Google Sheets)
-        if sheet:
-            try:
-                sheet.append_row([now, diff, current_stock])
-            except:
-                pass
+        # --- [關鍵點] 檢查歷史紀錄中最後一筆的庫存數 ---
+        is_duplicate = False
+        if not st.session_state.history.empty:
+            # .iloc[0] 是因為我們在程式裡是用 concat(new, history) 讓最新在上面
+            latest_recorded_stock = st.session_state.history.iloc[0]['剩餘庫存']
+            if current_stock == latest_recorded_stock:
+                is_duplicate = True
         
-        # B. 更新本地歷史紀錄 (Streamlit 畫面顯示用)
-        new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
-        st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
-        
-        # C. 成功紀錄後，才更新基準點
-        st.session_state.last_stock = current_stock
+        # 只有「不重複」才執行存入動作
+        if not is_duplicate:
+            diff = st.session_state.last_stock - current_stock
+            
+            # A. 寫入雲端
+            if sheet:
+                try:
+                    sheet.append_row([now, diff, current_stock])
+                except:
+                    pass
+            
+            # B. 更新本地歷史紀錄
+            new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
+            st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
+            
+            # C. 只有成功紀錄後才更新 last_stock 基準
+            st.session_state.last_stock = current_stock
+        else:
+            # 如果是重複庫存，雖然不存入，但要把基準點對齊，防止一直進入這個判斷
+            st.session_state.last_stock = current_stock
 
-    # 3. 處理補貨/退貨情況：如果庫存增加了，更新基準點，但不記錄銷售
+    # 3. 處理補貨/退貨情況
     elif current_stock > st.session_state.last_stock:
         st.session_state.last_stock = current_stock
 
