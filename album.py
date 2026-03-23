@@ -27,7 +27,7 @@ st.set_page_config(page_title="YUNA 簽售監控", layout="wide")
 st.title("🔥 ITZY Yuna 台北簽售 - 實時銷售監控")
 
 # 這是你提供的 TDK 庫存檢查 API
-API_URL = "https://www.tdkculture.com/api/merchandise/v1/check_stock?variation_id=69c0abbd51d28b0016bb4cf6"
+API_URL = "https://www.tdkculture.com/products/itzy-yuna-01"
 INITIAL_STOCK = 7990  # 假設初始庫存是 8000
 
 # --- 3. 初始化資料 ---
