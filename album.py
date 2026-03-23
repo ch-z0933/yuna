@@ -28,7 +28,7 @@ st.title("🔥 ITZY Yuna 台北簽售 - 實時銷售監控")
 
 # 這是你提供的 TDK 庫存檢查 API
 API_URL = "https://www.tdkculture.com/api/merchants/6981d83a102f1c007dd4ab54/products/69b110610ce76535f6ef2b51/check_stock?variation_id=69c0abbd51d28b0016bb4cf6"
-INITIAL_STOCK = 7990  # 假設初始庫存是 8000
+INITIAL_STOCK = 8000  # 假設初始庫存是 8000
 
 # --- 3. 初始化資料 ---
 if 'history' not in st.session_state:
