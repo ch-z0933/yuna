@@ -59,29 +59,46 @@ def get_data():
 
 # --- 4. 主程式邏輯 ---
 status_placeholder = st.empty()
+
 current_stock = get_data()
 
 if current_stock is not None:
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz).strftime("%H:%M:%S")
 
+    # 第一次執行：設定初始基準點
     if st.session_state.last_stock == 0:
         st.session_state.last_stock = current_stock
 
-    # 發生銷售變動
+    # --- 關鍵修正：判斷庫存真的有減少才記錄 ---
     if current_stock < st.session_state.last_stock:
-        diff = st.session_state.last_stock - current_stock # 單筆數量
+        diff = st.session_state.last_stock - current_stock
         
-        # 1. 寫入 Google Sheets (時間、單筆數量、剩餘庫存)
-        if sheet:
-            try:
-                sheet.append_row([now, diff, current_stock])
-            except:
-                pass
+        # 額外保險：檢查是否跟歷史最後一筆重複
+        is_duplicate = False
+        if not st.session_state.history.empty:
+            # 取出 history 第一列（最新的一筆）的剩餘庫存
+            last_recorded_stock = st.session_state.history.iloc[0]['剩餘庫存']
+            if current_stock == last_recorded_stock:
+                is_duplicate = True
 
-        # 2. 更新本地日誌
-        new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
-        st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
+        if not is_duplicate:
+            # 只有沒重複，才寫入雲端與更新紀錄
+            if sheet:
+                try:
+                    sheet.append_row([now, diff, current_stock])
+                except Exception as e:
+                    st.warning(f"寫入雲端失敗: {e}")
+            
+            # 更新本地日誌
+            new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
+            st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
+            
+            # 更新上次基準
+            st.session_state.last_stock = current_stock
+
+    # 如果有人退貨（庫存增加），更新基準點但不紀錄銷量
+    elif current_stock > st.session_state.last_stock:
         st.session_state.last_stock = current_stock
 
     # --- 5. 畫面渲染 ---
@@ -108,5 +125,5 @@ if current_stock is not None:
                 st.write("尚無銷售數據")
 
 # 15 秒刷新
-time.sleep(15)
+time.sleep(20)
 st.rerun()
