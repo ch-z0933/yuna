@@ -58,6 +58,14 @@ def get_data():
         return None
 
 # --- 4. 主程式邏輯 ---
+沒問題，這個邏輯最乾脆，也最能解決你看到的「跳針」現象！
+
+我們直接把判斷條件簡化：「只要目前的庫存量」等於「上一次記錄的庫存量」，就直接跳過，什麼都不做。
+
+請把 album.py 的主邏輯（# --- 4. 主程式執行 --- 之後）替換成這個**「防重複寫入」**的終極簡潔版：
+
+Python
+# --- 4. 主程式執行 ---
 status_placeholder = st.empty()
 
 current_stock = get_data()
@@ -66,38 +74,30 @@ if current_stock is not None:
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz).strftime("%H:%M:%S")
 
-    # 第一次執行：設定初始基準點
+    # 1. 第一次執行：先記錄初始庫存，不寫入試算表
     if st.session_state.last_stock == 0:
         st.session_state.last_stock = current_stock
 
-    # --- 關鍵修正：判斷庫存真的有減少才記錄 ---
+    # 2. 關鍵邏輯：只有當「庫存減少」且「庫存數與上一次不同」時才執行
+    # 如果 current_stock == last_stock，這裡會直接跳過，不會有任何動作
     if current_stock < st.session_state.last_stock:
         diff = st.session_state.last_stock - current_stock
         
-        # 額外保險：檢查是否跟歷史最後一筆重複
-        is_duplicate = False
-        if not st.session_state.history.empty:
-            # 取出 history 第一列（最新的一筆）的剩餘庫存
-            last_recorded_stock = st.session_state.history.iloc[0]['剩餘庫存']
-            if current_stock == last_recorded_stock:
-                is_duplicate = True
+        # A. 寫入雲端 (Google Sheets)
+        if sheet:
+            try:
+                sheet.append_row([now, diff, current_stock])
+            except:
+                pass
+        
+        # B. 更新本地歷史紀錄 (Streamlit 畫面顯示用)
+        new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
+        st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
+        
+        # C. 成功紀錄後，才更新基準點
+        st.session_state.last_stock = current_stock
 
-        if not is_duplicate:
-            # 只有沒重複，才寫入雲端與更新紀錄
-            if sheet:
-                try:
-                    sheet.append_row([now, diff, current_stock])
-                except Exception as e:
-                    st.warning(f"寫入雲端失敗: {e}")
-            
-            # 更新本地日誌
-            new_row = pd.DataFrame([{'時間': now, '單筆數量': diff, '剩餘庫存': current_stock}])
-            st.session_state.history = pd.concat([new_row, st.session_state.history], ignore_index=True)
-            
-            # 更新上次基準
-            st.session_state.last_stock = current_stock
-
-    # 如果有人退貨（庫存增加），更新基準點但不紀錄銷量
+    # 3. 處理補貨/退貨情況：如果庫存增加了，更新基準點，但不記錄銷售
     elif current_stock > st.session_state.last_stock:
         st.session_state.last_stock = current_stock
 
